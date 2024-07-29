@@ -23,7 +23,19 @@ app.get('/api/events', async (request, response) => {
             throw new Error(`Network response error: ${res.statusText}`);
         }
         
-        const events = await res.json();
+        const data = await res.json();
+        const events = data._embedded.events;
+        const eventDetails = events.map(event => ({
+            name: event.name,
+            date: event.dates.start.dateTime,
+            priceMin: event.priceRanges ? event.priceRanges[0].min + ' ' + event.priceRanges[0].currency 
+                                        : 'Price unavailable.',
+            priceMax: event.priceRanges ? event.priceRanges[0].max + ' ' + event.priceRanges[0].currency
+                                        : 'Price unavailable.',
+            location: event._embedded.venues[0].city.name + ', ' + event._embedded.venues[0].state.stateCode,
+            venue: event._embedded.venues[0].name
+        }))
+        console.log(eventDetails);
         response.json(events);
     }
     catch(error) {
