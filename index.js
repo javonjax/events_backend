@@ -25,18 +25,49 @@ app.get('/api/events', async (request, response) => {
         
         const data = await res.json();
         const events = data._embedded.events;
-        const eventDetails = events.map(event => ({
+
+        const formatDate = (dateString) => {
+            const date = new Date(dateString);
+            const options = { month: 'short', day: 'numeric', weekday: 'short'}
+
+            return date.toLocaleDateString('en-US', options);
+        };
+        
+        const eventFilter = (event) => {
+            return (
+                event.name &&
+                event.dates.start.dateTime &&
+                event.priceRanges &&
+                event._embedded.venues &&
+                event._embedded.venues[0].city &&
+                event._embedded.venues[0].state
+            );
+        };
+
+        const eventDetails = events.filter(eventFilter)
+        .map(event => ({
             name: event.name,
-            date: event.dates.start.dateTime,
+
+            date: event.dates.start.dateTime ? formatDate(event.dates.start.dateTime.split('T')[0])
+                                             : 'Dates unavailable.',
+
+            time: event.dates.start.dateTime ? event.dates.start.dateTime.split('T')[1].slice(0, -1) 
+                                             : 'Time unavailable.',
+
             priceMin: event.priceRanges ? event.priceRanges[0].min + ' ' + event.priceRanges[0].currency 
                                         : 'Price unavailable.',
+
             priceMax: event.priceRanges ? event.priceRanges[0].max + ' ' + event.priceRanges[0].currency
                                         : 'Price unavailable.',
-            location: event._embedded.venues[0].city.name + ', ' + event._embedded.venues[0].state.stateCode,
-            venue: event._embedded.venues[0].name
+
+            location: event._embedded.venues && event._embedded.venues[0].city && event._embedded.venues[0].state ? event._embedded.venues[0].city.name + ', ' + event._embedded.venues[0].state.stateCode
+                                                                                        : 'Location unavailable.',
+
+            venue: event._embedded.venues ? event._embedded.venues[0].name
+                                          : 'Venue name unavailable.'
         }))
-        console.log(eventDetails);
-        response.json(events);
+        console.log(data);
+        response.json(eventDetails);
     }
     catch(error) {
         console.log('Error fetching data from Ticketmaster:\n', error);
