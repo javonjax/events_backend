@@ -11,9 +11,9 @@ const TICKETMASTER_SUGGEST_API_URL = 'https://app.ticketmaster.com/discovery/v2/
 app.use(cors());
 
 
-/* GET events
-
- */
+/* 
+    GET multiple events. 
+*/
 app.get('/api/events', async (request, response) => {
     try {
 
@@ -38,26 +38,31 @@ app.get('/api/events', async (request, response) => {
             const [year, month, day] = dateString.split('-').map(Number);
             const date = new Date(year, month - 1, day);
             const options = { month: 'short', day: 'numeric', weekday: 'short'}
-            
-            return date.toLocaleDateString('en-US', options);
+            const formattedDate = date.toLocaleDateString('en-US', options);
+
+            return formattedDate;
         };
         
+
         // Converts time from 24hr to 12hr format.
         const formatTime = (timeString) => {
             const [hours24, mins] = timeString.split(':');
             const period = hours24 >= 12 ? 'PM' : 'AM';
             const hours = hours24 % 12 || 12;
-            const time = `${hours}:${mins} ${period}`;
+            const formattedTime = `${hours}:${mins} ${period}`;
 
-            return time;
+            return formattedTime;
         };
-        
+
+
         // Filter to remove objects that are missing data.
         const eventFilter = (event) => {
             return (
                 event.name &&
+                event.id &&
                 event.dates.start.localDate &&
                 event.dates.start.localTime &&
+                event.dates.start.dateTime &&
                 event.priceRanges &&
                 event._embedded &&
                 event._embedded.venues &&
@@ -66,37 +71,64 @@ app.get('/api/events', async (request, response) => {
             );
         };
 
-        // Retrieve necessary information about events.
+
+        // Sorts event objects based on local datetime.
+        const sortByDateTime = (a, b) => {
+            const dateTimeA = new Date(a.date + 'T' + a.time + 'Z');
+            const dateTimeB = new Date(b.date + 'T' + b.time + 'Z');
+
+            return dateTimeA - dateTimeB;
+        };
+
+
+        // Retrieve information about events.
         const eventDetails = events.filter(eventFilter)
         .map(event => {
-            console.log(event.dates.start.localDate);
 
             return (
                     {
                         name: event.name,
 
-                        date: event.dates.start.localDate ? formatDate(event.dates.start.localDate)
-                                                        : 'Dates unavailable.',
+                        id: event.id,
 
-                        time: event.dates.start.localTime ? formatTime(event.dates.start.localTime)
-                                                        : 'Time unavailable.',
+                        date: event.dates.start.localDate ? event.dates.start.localDate
+                                                          : 'Local date unavailable.',
+
+                        time: event.dates.start.localTime ? event.dates.start.localTime
+                                                          : 'Local time unavailable.',
+
+                        dateTimeUTC: event.dates.start.dateTime ? event.dates.start.dateTime
+                                                                : 'DateTime unavailable.',
 
                         priceMin: event.priceRanges ? event.priceRanges[0].min + ' ' + event.priceRanges[0].currency 
-                                                    : 'Price unavailable.',
+                                                    : 'Price min unavailable.',
 
                         priceMax: event.priceRanges ? event.priceRanges[0].max + ' ' + event.priceRanges[0].currency
                                                     : 'Price unavailable.',
 
                         location: event._embedded.venues && event._embedded.venues[0].city && event._embedded.venues[0].state ? event._embedded.venues[0].city.name + ', ' + event._embedded.venues[0].state.stateCode
-                                                                                                    : 'Location unavailable.',
+                                                                                                                              : 'Location unavailable.',
 
                         venue: event._embedded.venues ? event._embedded.venues[0].name
-                                                    : 'Venue name unavailable.'
+                                                      : 'Venue name unavailable.'
                     }
-            )
+            );
         });
+
+
+        // Sort events by local time.
+        eventDetails.sort(sortByDateTime);
         
-        response.json(data);
+
+        // Convert local times to 12hr format.
+        eventDetails.forEach((event) => {
+            event.time = formatTime(event.time);
+            event.date = formatDate(event.date);
+        });
+
+
+        response.json(eventDetails);
+        
     }
     catch(error) {
         console.log('Error fetching data from Ticketmaster:\n', error);
