@@ -4,12 +4,31 @@ const cors = require('cors');
 const app = express();
 const PORT = 3000;
 const TICKETMASTER_API_KEY = process.env.TICKETMASTER_API_KEY;
-const TICKETMASTER_EVENTS_API_URL = 'https://app.ticketmaster.com/discovery/v2/events.json';
+const TICKETMASTER_EVENTS_API_URL = 'https://app.ticketmaster.com/discovery/v2/events';
 const TICKETMASTER_SUGGEST_API_URL = 'https://app.ticketmaster.com/discovery/v2/suggest';
 
 
 app.use(cors());
 
+// Converts date from YYYY-MM-DD to Weekday, Month DD. 
+const formatDate = (dateString) => {
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    const options = { month: 'short', day: 'numeric', weekday: 'short'}
+    const formattedDate = date.toLocaleDateString('en-US', options);
+
+    return formattedDate;
+};
+
+// Converts time from 24hr to 12hr format.
+const formatTime = (timeString) => {
+    const [hours24, mins] = timeString.split(':');
+    const period = hours24 >= 12 ? 'PM' : 'AM';
+    const hours = hours24 % 12 || 12;
+    const formattedTime = `${hours}:${mins} ${period}`;
+
+    return formattedTime;
+};
 
 /* 
     GET multiple events. 
@@ -23,37 +42,16 @@ app.get('/api/events', async (request, response) => {
             ...request.query
         }).toString();
 
-        const res = await fetch(`${TICKETMASTER_EVENTS_API_URL}?${queryParams}`);
+        const res = await fetch(`${TICKETMASTER_EVENTS_API_URL}.json?${queryParams}`);
         
         if(!res.ok) {
+            console.log(res.text())
             throw new Error(`${res.status}: ${res.statusText}`);
         }
         
         const data = await res.json();
 
         const events = data._embedded.events;
-
-        // Converts date from YYYY-MM-DD to Weekday, Month DD. 
-        const formatDate = (dateString) => {
-            const [year, month, day] = dateString.split('-').map(Number);
-            const date = new Date(year, month - 1, day);
-            const options = { month: 'short', day: 'numeric', weekday: 'short'}
-            const formattedDate = date.toLocaleDateString('en-US', options);
-
-            return formattedDate;
-        };
-        
-
-        // Converts time from 24hr to 12hr format.
-        const formatTime = (timeString) => {
-            const [hours24, mins] = timeString.split(':');
-            const period = hours24 >= 12 ? 'PM' : 'AM';
-            const hours = hours24 % 12 || 12;
-            const formattedTime = `${hours}:${mins} ${period}`;
-
-            return formattedTime;
-        };
-
 
         // Filter to remove objects that are missing data.
         const eventFilter = (event) => {
@@ -119,21 +117,78 @@ app.get('/api/events', async (request, response) => {
         // Sort events by local time.
         eventDetails.sort(sortByDateTime);
         
-
         // Convert local times to 12hr format.
         eventDetails.forEach((event) => {
             event.time = formatTime(event.time);
             event.date = formatDate(event.date);
         });
 
-
         response.json(eventDetails);
-        
+
     }
     catch(error) {
         console.log('Error fetching data from Ticketmaster:\n', error);
         response.status(500).json({ error: 'Internal server error.'});
     }
+});
+
+/*
+    GET individual event by passing in an id.
+*/
+app.get('/api/events/:id', async (request, response) => {
+    const queryParams = new URLSearchParams({
+        apikey: TICKETMASTER_API_KEY,
+        ...request.query
+    }).toString();
+
+    const eventId = request.params.id;
+
+    const res = await fetch(`${TICKETMASTER_EVENTS_API_URL}/${eventId}.json?${queryParams}`);
+
+    if(!res.ok) {
+        throw new Error(`${res.status}: ${res.statusText}`);
+    }
+    
+    const event = await res.json();
+
+    // Find the appropriately sized image for the header.
+    const findImage = (images) => {
+        const detailImage = images.find(image => image.url.includes('ARTIST_PAGE'));
+        return detailImage.url;
+    };
+
+    const eventDetails = {
+        name: event.name,
+
+        date: event.dates.start.localDate ? formatDate(event.dates.start.localDate)
+                                          : '',
+
+        time: event.dates.start.localTime ? formatTime(event.dates.start.localTime)
+                                          : '',
+
+        priceMin: event.priceRanges && event.priceRanges[0].min ? '$' + event.priceRanges[0].min
+                                                                : '',
+
+        priceMax: event.priceRanges && event.priceRanges[0].max ? '$' + event.priceRanges[0].max
+                                                                : '',
+
+        info: event.info ? event.info 
+                         : event.description ? event.description
+                                             : '',
+
+        image: event.images ? `${findImage(event.images)}` : '',
+
+        seatmap: event.seatmap ? event.seatmap.staticUrl
+                               : '',
+
+        location: event._embedded && event._embedded.venues && event._embedded.venues[0].city && event._embedded.venues[0].state ? event._embedded.venues[0].city.name + ', ' + event._embedded.venues[0].state.stateCode
+                                                                                                                                 : '',
+
+        venue: event._embedded && event._embedded.venues ? event._embedded.venues[0].name
+                                                         : ''
+    };
+
+    response.json(eventDetails);
 });
 
 
