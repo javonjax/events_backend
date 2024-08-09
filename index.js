@@ -14,7 +14,7 @@ app.use(cors());
 const formatDate = (dateString) => {
     const [year, month, day] = dateString.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    const options = { month: 'short', day: 'numeric', weekday: 'short'}
+    const options = { month: 'short', day: 'numeric', weekday: 'short'};
     const formattedDate = date.toLocaleDateString('en-US', options);
 
     return formattedDate;
@@ -90,25 +90,25 @@ app.get('/api/events', async (request, response) => {
                         id: event.id,
 
                         date: event.dates.start.localDate ? event.dates.start.localDate
-                                                          : 'Local date unavailable.',
+                                                          : null,
 
                         time: event.dates.start.localTime ? event.dates.start.localTime
-                                                          : 'Local time unavailable.',
+                                                          : null,
 
                         dateTimeUTC: event.dates.start.dateTime ? event.dates.start.dateTime
-                                                                : 'DateTime unavailable.',
+                                                                : null,
 
                         priceMin: event.priceRanges ? event.priceRanges[0].min + ' ' + event.priceRanges[0].currency 
-                                                    : 'Price min unavailable.',
+                                                    : null,
 
                         priceMax: event.priceRanges ? event.priceRanges[0].max + ' ' + event.priceRanges[0].currency
-                                                    : 'Price unavailable.',
+                                                    : null,
 
                         location: event._embedded.venues && event._embedded.venues[0].city && event._embedded.venues[0].state ? event._embedded.venues[0].city.name + ', ' + event._embedded.venues[0].state.stateCode
-                                                                                                                              : 'Location unavailable.',
+                                                                                                                              : null,
 
                         venue: event._embedded.venues ? event._embedded.venues[0].name
-                                                      : 'Venue name unavailable.'
+                                                      : null
                     }
             );
         });
@@ -143,6 +143,12 @@ app.get('/api/events/:id', async (request, response) => {
 
     const eventId = request.params.id;
 
+    // Find the appropriately sized image for the header.
+    const findImage = (images) => {
+        const detailImage = images.find(image => image.url.includes('ARTIST_PAGE'));
+        return detailImage.url;
+    };
+
     const res = await fetch(`${TICKETMASTER_EVENTS_API_URL}/${eventId}.json?${queryParams}`);
 
     if(!res.ok) {
@@ -151,41 +157,39 @@ app.get('/api/events/:id', async (request, response) => {
     
     const event = await res.json();
 
-    // Find the appropriately sized image for the header.
-    const findImage = (images) => {
-        const detailImage = images.find(image => image.url.includes('ARTIST_PAGE'));
-        return detailImage.url;
-    };
 
     const eventDetails = {
         name: event.name,
 
         date: event.dates.start.localDate ? formatDate(event.dates.start.localDate)
-                                          : '',
+                                          : null,
 
         time: event.dates.start.localTime ? formatTime(event.dates.start.localTime)
-                                          : '',
+                                          : null,
 
-        priceMin: event.priceRanges && event.priceRanges[0].min ? '$' + event.priceRanges[0].min
-                                                                : '',
+        priceMin: event.priceRanges && event.priceRanges[0].min ? '$' + event.priceRanges[0].min.toFixed(2)
+                                                                : null,
 
-        priceMax: event.priceRanges && event.priceRanges[0].max ? '$' + event.priceRanges[0].max
-                                                                : '',
+        priceMax: event.priceRanges && event.priceRanges[0].max ? '$' + event.priceRanges[0].max.toFixed(2)
+                                                                : null,
 
-        info: event.info ? event.info 
-                         : event.description ? event.description
-                                             : '',
+        info: event.info ? event.info.trim() 
+                         : event.description ? event.description.trim()
+                                             : null,
 
-        image: event.images ? `${findImage(event.images)}` : '',
+        image: event.images ? `${findImage(event.images)}` : null,
 
         seatmap: event.seatmap ? event.seatmap.staticUrl
-                               : '',
+                               : null,
 
         location: event._embedded && event._embedded.venues && event._embedded.venues[0].city && event._embedded.venues[0].state ? event._embedded.venues[0].city.name + ', ' + event._embedded.venues[0].state.stateCode
-                                                                                                                                 : '',
+                                                                                                                                 : null,
 
         venue: event._embedded && event._embedded.venues ? event._embedded.venues[0].name
-                                                         : ''
+                                                         : null,
+
+        url:  event.url ? event.url
+                        : null
     };
 
     response.json(eventDetails);
