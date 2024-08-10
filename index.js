@@ -146,7 +146,10 @@ app.get('/api/events/:id', async (request, response) => {
     // Find the appropriately sized image for the header.
     const findImage = (images) => {
         const detailImage = images.find(image => image.url.includes('ARTIST_PAGE'));
-        return detailImage.url;
+        if(detailImage && detailImage.url) {
+            return detailImage.url;
+        }
+        return null;
     };
 
     const res = await fetch(`${TICKETMASTER_EVENTS_API_URL}/${eventId}.json?${queryParams}`);
@@ -177,7 +180,7 @@ app.get('/api/events/:id', async (request, response) => {
                          : event.description ? event.description.trim()
                                              : null,
 
-        image: event.images ? `${findImage(event.images)}` : null,
+        image: event.images ? findImage(event.images) : null,
 
         seatmap: event.seatmap ? event.seatmap.staticUrl
                                : null,
