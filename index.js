@@ -35,23 +35,43 @@ const formatTime = (timeString) => {
 */
 app.get('/api/events', async (request, response) => {
     try {
+        const countPerPage = 200;
+        const totalPages = 5;
+        const allEventData = [];
 
-        const queryParams = new URLSearchParams({
-            apikey: TICKETMASTER_API_KEY,
-            size: 200,
-            ...request.query
-        }).toString();
+        const fetchPage = async (pageNum) => {
+            const queryParams = new URLSearchParams({
+                apikey: TICKETMASTER_API_KEY,
+                size: countPerPage,
+                page: pageNum,
+                ...request.query
+            }).toString();
 
-        const res = await fetch(`${TICKETMASTER_EVENTS_API_URL}.json?${queryParams}`);
-        
-        if(!res.ok) {
-            console.log(res.text())
-            throw new Error(`${res.status}: ${res.statusText}`);
+            const res = await fetch(`${TICKETMASTER_EVENTS_API_URL}.json?${queryParams}`);
+            if(!res.ok){
+                console.log(res.text())
+                throw new Error(`Error fetching page ${pageNum}.\n${res.status}: ${res.statusText}`);
+            }
+
+            const data = await res.json();
+
+            return data;
         }
-        
-        const data = await res.json();
 
-        const events = data._embedded.events;
+        for (let page = 0; page < totalPages; page++){
+            try{
+                const res = await fetchPage(page);
+                if(res._embedded && res._embedded.events) {
+                    allEventData.push(...res._embedded.events);
+                } else {
+                    console.log(`No events returned for page ${page}`);
+                    break;
+                }
+            } catch(error) {
+                console.log(error);
+                break;  
+            }
+        }
 
         // Filter to remove objects that are missing data.
         const eventFilter = (event) => {
@@ -80,7 +100,7 @@ app.get('/api/events', async (request, response) => {
 
 
         // Retrieve information about events.
-        const eventDetails = events.filter(eventFilter)
+        const eventDetails = allEventData.filter(eventFilter)
         .map(event => {
 
             return (
@@ -122,7 +142,7 @@ app.get('/api/events', async (request, response) => {
             event.time = formatTime(event.time);
             event.date = formatDate(event.date);
         });
-
+        console.log(eventDetails.length);
         response.json(eventDetails);
 
     }
