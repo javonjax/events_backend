@@ -45,12 +45,15 @@ app.get('/api/events', async (request, response) => {
         const res = await fetch(`${TICKETMASTER_EVENTS_API_URL}.json?${queryParams}`);
         
         if(!res.ok) {
-            console.log(res.text())
+            errorText = await res.text();
+            console.log(errorText);
             throw new Error(`${res.status}: ${res.statusText}`);
         }
         
         const data = await res.json();
-
+        if(!data){
+            throw new Error('No data found.');
+        }
         const events = data._embedded.events;
 
         // Filter to remove objects that are missing data.
@@ -143,7 +146,7 @@ app.get('/api/events/:id', async (request, response) => {
 
     const eventId = request.params.id;
 
-    // Find the appropriately sized image for the header.
+    // Find the appropriately sized image for the info page header.
     const findImage = (images) => {
         const detailImage = images.find(image => image.url.includes('ARTIST_PAGE'));
         if(detailImage && detailImage.url) {
@@ -164,37 +167,31 @@ app.get('/api/events/:id', async (request, response) => {
     const eventDetails = {
         name: event.name,
 
-        date: event.dates.start.localDate ? formatDate(event.dates.start.localDate)
-                                          : null,
+        date: event.dates?.start?.localDate ? formatDate(event.dates.start.localDate)
+                                            : null,
 
-        time: event.dates.start.localTime ? formatTime(event.dates.start.localTime)
-                                          : null,
+        time: event.dates?.start?.localTime ? formatTime(event.dates.start.localTime)
+                                            : null,
 
-        priceMin: event.priceRanges && event.priceRanges[0].min ? '$' + event.priceRanges[0].min.toFixed(2)
-                                                                : null,
-
-        priceMax: event.priceRanges && event.priceRanges[0].max ? '$' + event.priceRanges[0].max.toFixed(2)
-                                                                : null,
-
-        info: event.info ? event.info.trim() 
-                         : event.description ? event.description.trim()
+        priceMin: event.priceRanges?.[0].min ? '$' + event.priceRanges[0].min.toFixed(2)
                                              : null,
+
+        priceMax: event.priceRanges?.[0].max ? '$' + event.priceRanges[0].max.toFixed(2)
+                                             : null,
+
+        info: event.info?.trim() || event.description?.trim() || null,
 
         image: event.images ? findImage(event.images) : null,
 
-        seatmap: event.seatmap ? event.seatmap.staticUrl
-                               : null,
+        seatmap: event.seatmap?.staticUrl || null,
 
-        location: event._embedded && event._embedded.venues && event._embedded.venues[0].city && event._embedded.venues[0].state ? event._embedded.venues[0].city.name + ', ' + event._embedded.venues[0].state.stateCode
-                                                                                                                                 : null,
+        location: event._embedded?.venues?.[0]?.city?.name && event._embedded?.venues?.[0]?.state?.stateCode ? event._embedded.venues[0].city.name + ', ' + event._embedded.venues[0].state.stateCode
+                                                                                                             : null,
 
-        venue: event._embedded && event._embedded.venues ? event._embedded.venues[0].name
-                                                         : null,
+        venue: event._embedded?.venues?.[0]?.name || null,
 
-        url:  event.url ? event.url
-                        : null
+        url:  event.url || null
     };
-
     response.json(eventDetails);
 });
 
