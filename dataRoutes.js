@@ -104,9 +104,8 @@ router.get('/events', async (request, response) => {
           event._embedded.venues &&
           event._embedded.venues[0].city &&
           event._embedded.venues[0].state
-            ? event._embedded.venues[0].city.name +
-              ', ' +
-              event._embedded.venues[0].state.stateCode
+            ? `${event._embedded.venues[0].city.name}, 
+                  ${event._embedded.venues[0].state.stateCode || event._embedded.venues[0].state.name}` 
             : null,
 
         venue: event._embedded.venues ? event._embedded.venues[0].name : null,
@@ -189,13 +188,16 @@ router.get('/events/:id', async (request, response) => {
 
         location:
           event._embedded?.venues?.[0]?.city?.name &&
-          event._embedded?.venues?.[0]?.state?.stateCode
-            ? event._embedded.venues[0].city.name +
-              ', ' +
-              event._embedded.venues[0].state.stateCode
+          (event._embedded?.venues?.[0]?.state?.stateCode || event._embedded?.venues?.[0]?.state?.name)
+            ? `${event._embedded.venues[0].city.name}, 
+                  ${event._embedded?.venues?.[0]?.state?.stateCode || event._embedded?.venues?.[0]?.state?.name}` 
             : null,
 
         venue: event._embedded?.venues?.[0]?.name || null,
+
+        address: event._embedded?.venues?.[0]?.address?.line1 && event._embedded?.venues?.[0]?.postalCode 
+                  ? event._embedded?.venues?.[0]?.address?.line1 + ', ' + event._embedded?.venues?.[0]?.postalCode
+                  : null,
 
         url: event.url || null,
       };
@@ -205,6 +207,106 @@ router.get('/events/:id', async (request, response) => {
       console.log('Error fetching data from Ticketmaster:\n', error);
       response.status(500).json({ error: 'Internal server error.' });
     }
+});
+
+router.get('/test/:id', async (request, response) => {
+  try {  
+    const queryParams = new URLSearchParams({
+      apikey: TICKETMASTER_API_KEY,
+      ...request.query,
+    }).toString();
+
+    const eventId = request.params.id;
+
+    // Find the appropriately sized image for the info page header.
+    const findImage = (images) => {
+      const detailImage = images.find((image) =>
+        image.url.includes('ARTIST_PAGE')
+      );
+      if (detailImage && detailImage.url) {
+        return detailImage.url;
+      }
+      return null;
+    };
+
+    const res = await fetch(
+      `${TICKETMASTER_EVENTS_API_URL}/${eventId}.json?${queryParams}`
+    );
+
+    if (!res.ok) {
+      throw new Error(`${res.status}: ${res.statusText}`);
+    }
+
+    const event = await res.json();
+
+    const eventDetails = {
+      name: event.name,
+
+      date: event.dates?.start?.localDate
+        ? formatDate(event.dates.start.localDate)
+        : null,
+
+      time: event.dates?.start?.localTime
+        ? formatTime(event.dates.start.localTime)
+        : null,
+
+      priceMin: event.priceRanges?.[0].min
+        ? '$' + event.priceRanges[0].min.toFixed(2)
+        : null,
+
+      priceMax: event.priceRanges?.[0].max
+        ? '$' + event.priceRanges[0].max.toFixed(2)
+        : null,
+
+      info: event.info?.trim() || event.description?.trim() || null,
+
+      image: event.images ? findImage(event.images) : null,
+
+      seatmap: event.seatmap?.staticUrl || null,
+
+      location:
+        event._embedded?.venues?.[0]?.city?.name &&
+        (event._embedded?.venues?.[0]?.state?.stateCode || event._embedded?.venues?.[0]?.state?.name)
+          ? `${event._embedded.venues[0].city.name}, 
+                ${event._embedded?.venues?.[0]?.state?.stateCode || event._embedded?.venues?.[0]?.state?.name}` 
+          : null,
+
+      venue: event._embedded?.venues?.[0]?.name || null,
+
+      url: event.url || null,
+    };
+    console.log(event);
+    response.json(event);
+  } catch(error) {
+    console.log('Error fetching data from Ticketmaster:\n', error);
+    response.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+
+router.get('/classes', async (request, response) => {
+  try {  
+    const queryParams = new URLSearchParams({
+      apikey: TICKETMASTER_API_KEY,
+      ...request.query,
+    }).toString();
+
+    const TICKETMASTER_CLASS_API_URL = process.env.TICKETMASTER_CLASS_API_URL;
+    
+    const res = await fetch(`${TICKETMASTER_CLASS_API_URL}.json?${queryParams}`);
+
+
+    if (!res.ok) {
+      throw new Error(`${res.status}: ${res.statusText}`);
+    }
+
+    const event = await res.json();
+    
+    response.json(event);
+  } catch(error) {
+    console.log('Error fetching data from Ticketmaster:\n', error);
+    response.status(500).json({ error: 'Internal server error.' });
+  }
 });
 
 /*
