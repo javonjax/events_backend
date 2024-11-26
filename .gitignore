@@ -132,3 +132,4 @@ dist
 .pnp.*
 
 generate-key.js
+db_schema/
