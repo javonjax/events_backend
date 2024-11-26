@@ -36,23 +36,25 @@ router.get('/events', async (request, response) => {
       size: 200,
       ...request.query,
     }).toString();
+    
+    const currentPage = Number(request.query.page);
+    console.log('curr page', currentPage)
 
     const res = await fetch(
       `${TICKETMASTER_EVENTS_API_URL}.json?${queryParams}`
     );
 
     if (!res.ok) {
-      errorText = await res.text();
-      console.log(errorText);
-      throw new Error(`${res.status}: ${res.statusText}`);
+      throw new Error(`Internal server error ${res.status}: ${res.statusText}`);
     }
 
     const data = await res.json();
+    
     if (!data) {
-      throw new Error('No data found.');
+      throw new Error(`No data found using the following parameters: ${request.query}.`);
     }
     const events = data._embedded.events;
-
+    
     // Filter to remove objects that are missing data.
     const eventFilter = (event) => {
       return (
@@ -120,11 +122,14 @@ router.get('/events', async (request, response) => {
       event.time = formatTime(event.time);
       event.date = formatDate(event.date);
     });
-
-    response.json(eventDetails);
+  
+    response.json({
+      "events": [...eventDetails], 
+      "nextPage": events.length >= 200 && currentPage < 4 ? currentPage + 1 : null
+    });
   } catch (error) {
     console.log('Error fetching data from Ticketmaster:\n', error);
-    response.status(500).json({ error: 'Internal server error.' });
+    response.status(500).json({ message: error});
   }
 });
 
@@ -156,7 +161,7 @@ router.get('/events/:id', async (request, response) => {
       );
 
       if (!res.ok) {
-        throw new Error(`${res.status}: ${res.statusText}`);
+        throw new Error(`Internal server error ${res.status}: ${res.statusText}`);
       }
 
       const event = await res.json();
@@ -205,7 +210,7 @@ router.get('/events/:id', async (request, response) => {
       response.json(eventDetails);
     } catch(error) {
       console.log('Error fetching data from Ticketmaster:\n', error);
-      response.status(500).json({ error: 'Internal server error.' });
+      response.status(500).json({ message: error });
     }
 });
 
@@ -279,11 +284,13 @@ router.get('/test/:id', async (request, response) => {
     response.json(event);
   } catch(error) {
     console.log('Error fetching data from Ticketmaster:\n', error);
-    response.status(500).json({ error: 'Internal server error.' });
+    response.status(500).json({ message: 'Internal server error.' });
   }
 });
 
-
+/*
+  GET all classifications.
+*/
 router.get('/classes', async (request, response) => {
   try {  
     const queryParams = new URLSearchParams({
@@ -294,7 +301,7 @@ router.get('/classes', async (request, response) => {
     const TICKETMASTER_CLASS_API_URL = process.env.TICKETMASTER_CLASS_API_URL;
     
     const res = await fetch(`${TICKETMASTER_CLASS_API_URL}.json?${queryParams}`);
-
+    console.log(res.headers)
 
     if (!res.ok) {
       throw new Error(`${res.status}: ${res.statusText}`);
@@ -305,7 +312,36 @@ router.get('/classes', async (request, response) => {
     response.json(event);
   } catch(error) {
     console.log('Error fetching data from Ticketmaster:\n', error);
-    response.status(500).json({ error: 'Internal server error.' });
+    response.status(500).json({ message: 'Internal server error.' });
+  }
+});
+
+/*
+  GET attraction details.
+*/
+router.get('/attractions/:id', async (request, response) => {
+  try {  
+    const queryParams = new URLSearchParams({
+      apikey: TICKETMASTER_API_KEY,
+      ...request.query,
+    }).toString();
+    console.log(request.params.id)
+    const id = request.params.id;
+
+    const TICKETMASTER_ATTRACTION_API_URL = process.env.TICKETMASTER_ATTRACTION_API_URL;
+    
+    const res = await fetch(`${TICKETMASTER_ATTRACTION_API_URL}/${id}.json?${queryParams}`);
+
+    if (!res.ok) {
+      throw new Error(`${res.status}: ${res.statusText}`);
+    }
+
+    const attraction = await res.json();
+    
+    response.json(attraction);
+  } catch(error) {
+    console.log('Error fetching data from Ticketmaster:\n', error);
+    response.status(500).json({ message: 'Internal server error.' });
   }
 });
 
@@ -328,7 +364,7 @@ router.get('/suggest', async (request, response) => {
     response.send(data);
   } catch (error) {
     console.log('Error fetching data from Ticketmaster:\n', error);
-    response.status(500).json({ error: 'Internal server error.' });
+    response.status(500).json({ message: 'Internal server error.' });
   }
 });
 
